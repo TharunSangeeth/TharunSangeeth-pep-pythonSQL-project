@@ -48,30 +48,74 @@ def main():
 
 # This function will load the users.csv file into the users table, discarding any records with incomplete data
 def load_and_clean_users(file_path):
-
-    print("TODO: load_users")
+     with open(file_path, 'r') as file:
+        csv_reader = csv.DictReader(file)
+        for row in csv_reader:
+            userId = row.get('userId')
+            firstName_raw = row.get('firstName')
+            lastName_raw = row.get('lastName')
+            
+            # Strip whitespace and check if not empty or contains only whitespace
+            firstName = firstName_raw.strip() if firstName_raw and not firstName_raw.strip().isspace() else None
+            lastName = lastName_raw.strip() if lastName_raw and not lastName_raw.strip().isspace() else None
+            
+            if userId and firstName and lastName:  # Check if all required fields are present and non-empty
+                cursor.execute('''INSERT INTO users (userId, firstName, lastName) VALUES (?, ?, ?)''',
+                               (userId, firstName, lastName))
+            else:
+                print(f"Incomplete record: {row}")
+                print(f"Stripped firstName: '{firstName}', Stripped lastName: '{lastName}'")
+    conn.commit()
 
 
 # This function will load the callLogs.csv file into the callLogs table, discarding any records with incomplete data
 def load_and_clean_call_logs(file_path):
-
-    print("TODO: load_call_logs")
+    with open(file_path, 'r') as file:
+        csv_reader = csv.DictReader(file)
+        for row in csv_reader:
+            if all(row.values()):  # Check if all values are non-empty
+                cursor.execute('''INSERT INTO callLogs (callId, phoneNumber, startTime, endTime, direction, userId) 
+                                  VALUES (?, ?, ?, ?, ?, ?)''',
+                               (row['callId'], row['phoneNumber'], row['startTime'], row['endTime'],
+                                row['direction'], row['userId']))
+            else:
+                print(f"Skipping incomplete record: {row}")
+    conn.commit()  # Commit the changes
 
 
 # This function will write analytics data to testUserAnalytics.csv - average call time, and number of calls per user.
 # You must save records consisting of each userId, avgDuration, and numCalls
 # example: 1,105.0,4 - where 1 is the userId, 105.0 is the avgDuration, and 4 is the numCalls.
 def write_user_analytics(csv_file_path):
+    with open(csv_file_path, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['userId', 'avgDuration', 'numCalls'])
 
-    print("TODO: write_user_analytics")
+        cursor.execute('''
+            SELECT userId, AVG(endTime - startTime) AS avgDuration, COUNT(*) AS numCalls
+            FROM callLogs
+            GROUP BY userId
+        ''')
+        rows = cursor.fetchall()
+        for row in rows:
+            writer.writerow(row)
 
 
 # This function will write the callLogs ordered by userId, then start time.
 # Then, write the ordered callLogs to orderedCalls.csv
 def write_ordered_calls(csv_file_path):
+    with open(csv_file_path, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['callId', 'phoneNumber', 'startTime', 'endTime', 'direction', 'userId'])
 
-    print("TODO: write_ordered_calls")
-
+        cursor.execute('''
+            SELECT *
+            FROM callLogs
+            ORDER BY userId, startTime
+        ''')
+        rows = cursor.fetchall()
+        for row in rows:
+            writer.writerow(row)
 
 
 # No need to touch the functions below!------------------------------------------
