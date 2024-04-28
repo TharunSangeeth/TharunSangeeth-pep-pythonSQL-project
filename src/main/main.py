@@ -43,86 +43,85 @@ def main():
     conn.close()
 
 
-# TODO: Implement the following 4 functions. The functions must pass the unit tests to complete the project.
-
-
 # This function will load the users.csv file into the users table, discarding any records with incomplete data
-def load_and_clean_users(file_path):
-     with open(file_path, 'r') as file:
-        csv_reader = csv.DictReader(file)
-        for row in csv_reader:
-            userId = row.get('userId')
-            firstName_raw = row.get('firstName')
-            lastName_raw = row.get('lastName')
+def load_and_clean_users(filepath):
+    with open(filepath, 'r', newline='') as file:
+        reader = csv.reader(file)
+        next(reader)  
+        for row in reader:
             
-            # Strip whitespace and check if not empty or contains only whitespace
-            firstName = firstName_raw.strip() if firstName_raw and not firstName_raw.strip().isspace() else None
-            lastName = lastName_raw.strip() if lastName_raw and not lastName_raw.strip().isspace() else None
-            
-            if userId and firstName and lastName:  # Check if all required fields are present and non-empty
-                cursor.execute('''INSERT INTO users (userId, firstName, lastName) VALUES (?, ?, ?)''',
-                               (userId, firstName, lastName))
+            if len(row) == 2:  
+                first_name, last_name = row
+               
+                if first_name.strip() and last_name.strip():
+                    cursor.execute('''INSERT INTO users (firstName, lastName)
+                                      VALUES (?, ?)''', (first_name, last_name))
             else:
-                print(f"Incomplete record: {row}")
-                print(f"Stripped firstName: '{firstName}', Stripped lastName: '{lastName}'")
-    conn.commit()
+                print("Invalid row:", row)
 
 
-# This function will load the callLogs.csv file into the callLogs table, discarding any records with incomplete data
+
 def load_and_clean_call_logs(file_path):
-    with open(file_path, 'r') as file:
-        csv_reader = csv.DictReader(file)
-        for row in csv_reader:
-            if all(row.values()):  # Check if all values are non-empty
-                cursor.execute('''INSERT INTO callLogs (callId, phoneNumber, startTime, endTime, direction, userId) 
-                                  VALUES (?, ?, ?, ?, ?, ?)''',
-                               (row['callId'], row['phoneNumber'], row['startTime'], row['endTime'],
-                                row['direction'], row['userId']))
+    with open(file_path, 'r', newline='') as file:
+        reader = csv.reader(file)
+        next(reader)  
+        for row in reader:
+           
+            if len(row) == 5: 
+                phone_number, start_time, end_time, direction, user_id = row
+                
+                if all(field.strip() for field in row):
+                    cursor.execute('''INSERT INTO callLogs (phoneNumber, startTime, endTime, direction, userId)
+                                      VALUES (?, ?, ?, ?, ?)''', (phone_number, start_time, end_time, direction, user_id))
             else:
-                print(f"Skipping incomplete record: {row}")
-    conn.commit()  # Commit the changes
+                print("Invalid row:", row)
 
 
-# This function will write analytics data to testUserAnalytics.csv - average call time, and number of calls per user.
-# You must save records consisting of each userId, avgDuration, and numCalls
-# example: 1,105.0,4 - where 1 is the userId, 105.0 is the avgDuration, and 4 is the numCalls.
+
 def write_user_analytics(csv_file_path):
+    
+    user_data = {}
+
+    
+    cursor.execute('''SELECT userId, SUM(endTime - startTime) AS total_duration, COUNT(*) AS num_calls
+                      FROM callLogs
+                      GROUP BY userId''')
+    results = cursor.fetchall()
+
+    
+    for row in results:
+        user_id, total_duration, num_calls = row
+        user_data[user_id] = (total_duration, num_calls)
+
+   
     with open(csv_file_path, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['userId', 'avgDuration', 'numCalls'])
+        for user_id, (total_duration, num_calls) in user_data.items():
+            if num_calls > 0:
+                avg_duration = total_duration / num_calls
+                writer.writerow([user_id, avg_duration, num_calls])
+            else:
+                
+                writer.writerow([user_id, 0, num_calls])
 
-        cursor.execute('''
-            SELECT userId, AVG(endTime - startTime) AS avgDuration, COUNT(*) AS numCalls
-            FROM callLogs
-            GROUP BY userId
-        ''')
-        rows = cursor.fetchall()
-        for row in rows:
-            writer.writerow(row)
-
-
-# This function will write the callLogs ordered by userId, then start time.
-# Then, write the ordered callLogs to orderedCalls.csv
 def write_ordered_calls(csv_file_path):
+    
+    cursor.execute('''SELECT * FROM callLogs ORDER BY userId, startTime''')
+    ordered_calls = cursor.fetchall()
+
+    
     with open(csv_file_path, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['callId', 'phoneNumber', 'startTime', 'endTime', 'direction', 'userId'])
+        for call_log in ordered_calls:
+            writer.writerow(call_log)
 
-        cursor.execute('''
-            SELECT *
-            FROM callLogs
-            ORDER BY userId, startTime
-        ''')
-        rows = cursor.fetchall()
-        for row in rows:
-            writer.writerow(row)
 
 
 # No need to touch the functions below!------------------------------------------
-
 # This function is for debugs/validation - uncomment the function invocation in main() to see the data in the database.
 def select_from_users_and_call_logs():
-
     print()
     print("PRINTING DATA FROM USERS")
     print("-------------------------")
@@ -146,6 +145,5 @@ def select_from_users_and_call_logs():
 def return_cursor():
     return cursor
 
-
-if __name__ == '__main__':
+if 'name' == 'main':
     main()
